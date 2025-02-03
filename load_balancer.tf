@@ -28,7 +28,7 @@ port        = 80
   }
 }
 
-resource "aws_lb_listener" "example_listener" {
+resource "aws_lb_listener" "simple_webserver_aws_lb_listener" {
   load_balancer_arn = aws_lb.simple_webserver_lb.arn
   port              = 80
   protocol          = "HTTP"
