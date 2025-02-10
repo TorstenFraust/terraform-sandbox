@@ -5,6 +5,8 @@ resource "aws_ecs_service" "simple_webserver_service" {
   cluster         = aws_ecs_cluster.simple_webserver_cluster.id
   task_definition = aws_ecs_task_definition.simple_webserver_task.arn
   desired_count   = 1
+  enable_execute_command = true
+
   launch_type     = "FARGATE"
 
   network_configuration {
@@ -18,6 +20,7 @@ resource "aws_ecs_service" "simple_webserver_service" {
     container_name   = "simple_webserver"
     container_port   = 80
   }
+
   tags = {
     owner = "torsten"
   }
@@ -31,13 +34,14 @@ resource "aws_ecs_cluster" "simple_webserver_cluster" {
   }
 
   tags = {
-    Owner = "torsten"
+    owner = "torsten"
   }
 }
 
 resource "aws_ecs_task_definition" "simple_webserver_task" {
   family                   = "simple_webserver_task"
   requires_compatibilities = ["FARGATE"]
+  task_role_arn = aws_iam_role.ecs_task_role.arn
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
@@ -59,4 +63,48 @@ resource "aws_ecs_task_definition" "simple_webserver_task" {
     tags = {
         owner = "torsten"
   }
+}
+
+
+# Task Role for ssh into the ecs task
+resource "aws_iam_role" "ecs_task_role" {
+  name = "simple_webserver_task_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  tags = {
+    owner = "torsten"
+  }
+}
+
+# SSM permissions for ECS Exec
+resource "aws_iam_role_policy" "ecs_exec_policy" {
+  name = "ecs_exec_policy"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }

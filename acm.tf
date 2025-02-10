@@ -1,39 +1,99 @@
-resource "aws_acm_certificate" "simple-webserver" {
-  domain_name       = "torstens-domain.com"
-  validation_method = "DNS"
+# resource "aws_acm_certificate" "simple-webserver" {
+#   domain_name       = "torstens-domain.com"
+#   validation_method = "DNS"
 
-  tags = {
-    Name = "simple-webserver-torsten"
-    owner = "torsten"
+#   tags = {
+#     Name = "simple-webserver-torsten"
+#     owner = "torsten"
 
-  }
-}
-
-resource "aws_route53_zone" "simple_webserver" {
-  name = "torstens-domain.com"
-
-  tags = {
-    Name  = "torstens-domain.com"
-    owner = "torsten"
-  }
-}
-
-# data "aws_route53_zone" "simple-webserver" {
-#   name = "torstens-domain.com"
+#   }
 # }
 
+# resource "aws_route53_zone" "simple_webserver" {
+#   name = "torstens-domain.com"
+
+#   tags = {
+#     Name  = "torstens-domain.com"
+#     owner = "torsten"
+#   }
+# }
+
+# # data "aws_route53_zone" "simple-webserver" {
+# #   name = "torstens-domain.com"
+# # }
+
+# resource "aws_route53_record" "simple-webserver" {
+#   for_each = {
+#     for dvo in aws_acm_certificate.simple-webserver.domain_validation_options : dvo.domain_name => {
+#       name   = dvo.resource_record_name
+#       type   = dvo.resource_record_type
+#       value  = dvo.resource_record_value
+#     }
+#   }
+
+#   name    = each.value.name
+#   type    = each.value.type
+#   zone_id = aws_route53_zone.simple_webserver.zone_id
+#   records = [each.value.value]
+#   ttl     = 60
+# }
+
+data "aws_route53_zone" "tlservers" {
+  name = "tlservers.net"
+}
+
+# Create the subdomain record pointing to the ALB
 resource "aws_route53_record" "simple-webserver" {
+  zone_id = data.aws_route53_zone.tlservers.zone_id
+  name    = "simple-webserver.tlservers.net"
+  type    = "A"
+
+  alias {
+    name                  = aws_lb.simple_webserver_lb.dns_name
+    zone_id               = aws_lb.simple_webserver_lb.zone_id
+    evaluate_target_health = true
+  }
+}
+
+#  Certificate
+
+resource "aws_acm_certificate" "simple-webserver" {
+  domain_name       = "frontend.tlservers.net"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Create DNS validation record
+resource "aws_route53_record" "cert_validation" {
   for_each = {
     for dvo in aws_acm_certificate.simple-webserver.domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
+      record = dvo.resource_record_value
       type   = dvo.resource_record_type
-      value  = dvo.resource_record_value
     }
   }
 
+  zone_id = data.aws_route53_zone.tlservers.zone_id
   name    = each.value.name
   type    = each.value.type
-  zone_id = aws_route53_zone.simple_webserver.zone_id
-  records = [each.value.value]
+  records = [each.value.record]
   ttl     = 60
+}
+
+# Certificate validation
+
+resource "aws_acm_certificate" "frontend" {
+  domain_name       = "simple-webserver.tlservers.net"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+  tags = {
+    name = "simple-webserver-certificate"
+    owner = "torsten"
+  }
 }
