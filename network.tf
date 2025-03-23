@@ -115,25 +115,6 @@ resource "aws_lb_listener" "simple_webserver_http_redirect" {
   }
 }
 
-resource "aws_lb_listener_rule" "simple-webserver" {
-  listener_arn = aws_lb_listener.simple_webserver_http_redirect.arn
-  priority     = 100
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
-  }
-
-  condition {
-    host_header {
-      values = ["simple-webserver.tlservers.net"]
-    }
-  }
-    tags = {
-    owner = "torsten"
-  }
-}
-
 resource "aws_lb_listener" "simple_webserver_https_listener" {
   load_balancer_arn = aws_lb.simple_webserver_lb.arn
   port              = 443
@@ -141,9 +122,31 @@ resource "aws_lb_listener" "simple_webserver_https_listener" {
   ssl_policy        = "ELBSecurityPolicy-2016-08"
   certificate_arn   = aws_acm_certificate.simple-webserver.arn
   
+  # Default action is a fixed response for any requests that don't match rules
   default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Access denied"
+      status_code  = "403"
+    }
+  }
+  
+  tags = {
+    owner = "torsten"
+  }
+  
+  depends_on = [aws_acm_certificate_validation.simple-webserver]
+}
+
+resource "aws_lb_listener_rule" "simple-webserver-auth" {
+  listener_arn = aws_lb_listener.simple_webserver_https_listener.arn
+  priority     = 1
+
+  action {
     type = "authenticate-oidc"
-      authenticate_oidc {
+    
+    authenticate_oidc {
       authorization_endpoint = "https://tourlane-staging.eu.auth0.com/authorize"
       client_id             = var.auth0_client_id
       client_secret         = var.auth0_client_secret
@@ -154,13 +157,27 @@ resource "aws_lb_listener" "simple_webserver_https_listener" {
       scope                 = "openid email profile"
       session_cookie_name   = "AWSELBAuthSessionCookie"
       session_timeout       = 3600
+      on_unauthenticated_request = "authenticate"
+    }
+    
+    order = 1
+  }
+  
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
+    order            = 2
+  }
+
+  condition {
+    host_header {
+      values = ["simple-webserver.tlservers.net"]
     }
   }
+  
   tags = {
     owner = "torsten"
   }
-  
-  depends_on = [aws_acm_certificate_validation.simple-webserver]
 }
 
 resource "aws_security_group_rule" "lb_https_ingress" {
