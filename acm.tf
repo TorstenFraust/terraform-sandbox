@@ -53,22 +53,22 @@ resource "aws_acm_certificate" "simple-webserver" {
   }
 }
 
-resource "aws_lb_listener_rule" "simple-webserver-https" {
-  listener_arn = aws_lb_listener.simple_webserver_https_listener.arn
-  priority     = 100
+# resource "aws_lb_listener_rule" "simple-webserver-https" {
+#   listener_arn = aws_lb_listener.simple_webserver_https_listener.arn
+#   priority     = 100
 
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
-  }
+#   action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
+#   }
 
-  condition {
-    host_header {
-      values = ["simple-webserver.tlservers.net"]
-    }
-  }
+#   condition {
+#     host_header {
+#       values = ["simple-webserver.tlservers.net"]
+#     }
+#   }
   
-  tags = {
-    owner = "torsten"
-  }
-}
+#   tags = {
+#     owner = "torsten"
+#   }
+# }

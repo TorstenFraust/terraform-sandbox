@@ -122,7 +122,7 @@ resource "aws_lb_listener" "simple_webserver_https_listener" {
   ssl_policy        = "ELBSecurityPolicy-2016-08"
   certificate_arn   = aws_acm_certificate.simple-webserver.arn
   
-  # Default action is a fixed response for any requests that don't match rules
+  # Default action for requests that don't match rules
   default_action {
     type = "fixed-response"
     fixed_response {
@@ -158,6 +158,7 @@ resource "aws_lb_listener_rule" "simple-webserver-auth" {
       session_cookie_name   = "AWSELBAuthSessionCookie"
       session_timeout       = 3600
       on_unauthenticated_request = "authenticate"
+      
     }
     
     order = 1
@@ -180,6 +181,54 @@ resource "aws_lb_listener_rule" "simple-webserver-auth" {
   }
 }
 
+resource "aws_lb_listener_rule" "auth-callback" {
+  listener_arn = aws_lb_listener.simple_webserver_https_listener.arn
+  priority     = 2  # Second highest priority
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
+  }
+
+  # Match the OAuth callback path
+  condition {
+    path_pattern {
+      values = ["/oauth2/idpresponse*"]
+    }
+  }
+  
+  tags = {
+    owner = "torsten"
+  }
+}
+
+resource "aws_lb_listener_rule" "simple-webserver-backup" {
+  listener_arn = aws_lb_listener.simple_webserver_https_listener.arn
+  priority     = 100  # Lower priority than the auth rule
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
+  }
+
+  condition {
+    host_header {
+      values = ["simple-webserver.tlservers.net"]
+    }
+  }
+  
+  # Add authentication check condition to only match authenticated users
+  condition {
+    http_header {
+      http_header_name = "Cookie"
+      values           = ["AWSELBAuthSessionCookie*"]  # Match if auth cookie exists
+    }
+  }
+  
+  tags = {
+    owner = "torsten"
+  }
+}
 resource "aws_security_group_rule" "lb_https_ingress" {
   security_group_id = aws_security_group.simple_webserver_lb_security_group.id
   type              = "ingress"
