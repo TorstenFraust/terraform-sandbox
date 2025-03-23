@@ -1,42 +1,3 @@
-# resource "aws_acm_certificate" "simple-webserver" {
-#   domain_name       = "torstens-domain.com"
-#   validation_method = "DNS"
-
-#   tags = {
-#     Name = "simple-webserver-torsten"
-#     owner = "torsten"
-
-#   }
-# }
-
-# resource "aws_route53_zone" "simple_webserver" {
-#   name = "torstens-domain.com"
-
-#   tags = {
-#     Name  = "torstens-domain.com"
-#     owner = "torsten"
-#   }
-# }
-
-# # data "aws_route53_zone" "simple-webserver" {
-# #   name = "torstens-domain.com"
-# # }
-
-# resource "aws_route53_record" "simple-webserver" {
-#   for_each = {
-#     for dvo in aws_acm_certificate.simple-webserver.domain_validation_options : dvo.domain_name => {
-#       name   = dvo.resource_record_name
-#       type   = dvo.resource_record_type
-#       value  = dvo.resource_record_value
-#     }
-#   }
-
-#   name    = each.value.name
-#   type    = each.value.type
-#   zone_id = aws_route53_zone.simple_webserver.zone_id
-#   records = [each.value.value]
-#   ttl     = 60
-# }
 
 data "aws_route53_zone" "tlservers" {
   name = "tlservers.net"
@@ -57,15 +18,6 @@ resource "aws_route53_record" "simple-webserver" {
 
 #  Certificate
 
-resource "aws_acm_certificate" "simple-webserver" {
-  domain_name       = "frontend.tlservers.net"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
 # Create DNS validation record
 resource "aws_route53_record" "cert_validation" {
   for_each = {
@@ -83,9 +35,12 @@ resource "aws_route53_record" "cert_validation" {
   ttl     = 60
 }
 
-# Certificate validation
+resource "aws_acm_certificate_validation" "simple-webserver" {
+  certificate_arn         = aws_acm_certificate.simple-webserver.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
 
-resource "aws_acm_certificate" "frontend" {
+resource "aws_acm_certificate" "simple-webserver" {
   domain_name       = "simple-webserver.tlservers.net"
   validation_method = "DNS"
 
@@ -94,6 +49,26 @@ resource "aws_acm_certificate" "frontend" {
   }
   tags = {
     name = "simple-webserver-certificate"
+    owner = "torsten"
+  }
+}
+
+resource "aws_lb_listener_rule" "simple-webserver-https" {
+  listener_arn = aws_lb_listener.simple_webserver_https_listener.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
+  }
+
+  condition {
+    host_header {
+      values = ["simple-webserver.tlservers.net"]
+    }
+  }
+  
+  tags = {
     owner = "torsten"
   }
 }

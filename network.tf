@@ -96,22 +96,27 @@ resource "aws_lb_target_group" "simple_webserver_target_group" {
   }
 }
 
-resource "aws_lb_listener" "simple_webserver_aws_lb_listener" {
+resource "aws_lb_listener" "simple_webserver_http_redirect" {
   load_balancer_arn = aws_lb.simple_webserver_lb.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
+  
   tags = {
     owner = "torsten"
   }
 }
 
 resource "aws_lb_listener_rule" "simple-webserver" {
-  listener_arn = aws_lb_listener.simple_webserver_aws_lb_listener.arn
+  listener_arn = aws_lb_listener.simple_webserver_http_redirect.arn
   priority     = 100
 
   action {
@@ -127,4 +132,49 @@ resource "aws_lb_listener_rule" "simple-webserver" {
     tags = {
     owner = "torsten"
   }
+}
+
+resource "aws_lb_listener" "simple_webserver_https_listener" {
+  load_balancer_arn = aws_lb.simple_webserver_lb.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate.simple-webserver.arn
+  
+  default_action {
+    type = "authenticate-oidc"
+      authenticate_oidc {
+      authorization_endpoint = "https://tourlane-staging.eu.auth0.com/authorize"
+      client_id             = var.auth0_client_id
+      client_secret         = var.auth0_client_secret
+      issuer                = "https://tourlane-staging.eu.auth0.com/"
+      token_endpoint        = "https://tourlane-staging.eu.auth0.com/oauth/token"
+      user_info_endpoint    = "https://tourlane-staging.eu./userinfo"
+      
+      scope                 = "openid email profile"
+      session_cookie_name   = "AWSELBAuthSessionCookie"
+      session_timeout       = 3600
+    }
+  }
+    # After authentication, forward to target group
+  default_action {
+    type             = "forward" 
+    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
+  }
+  
+  
+  tags = {
+    owner = "torsten"
+  }
+  
+  depends_on = [aws_acm_certificate_validation.simple-webserver]
+}
+
+resource "aws_security_group_rule" "lb_https_ingress" {
+  security_group_id = aws_security_group.simple_webserver_lb_security_group.id
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
 }
