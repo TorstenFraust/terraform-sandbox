@@ -149,20 +149,13 @@ resource "aws_lb_listener" "simple_webserver_https_listener" {
       client_secret         = var.auth0_client_secret
       issuer                = "https://tourlane-staging.eu.auth0.com/"
       token_endpoint        = "https://tourlane-staging.eu.auth0.com/oauth/token"
-      user_info_endpoint    = "https://tourlane-staging.eu./userinfo"
+      user_info_endpoint    = "https://tourlane-staging.eu.auth0.com/userinfo"
       
       scope                 = "openid email profile"
       session_cookie_name   = "AWSELBAuthSessionCookie"
       session_timeout       = 3600
     }
   }
-    # After authentication, forward to target group
-  default_action {
-    type             = "forward" 
-    target_group_arn = aws_lb_target_group.simple_webserver_target_group.arn
-  }
-  
-  
   tags = {
     owner = "torsten"
   }
