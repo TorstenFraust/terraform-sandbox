@@ -26,7 +26,7 @@ resource "aws_security_group" "simple_webserver_security_group" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = [aws_security_group.simple_webserver_lb_security_group.id]
   }
 
   egress {
@@ -49,6 +49,13 @@ resource "aws_security_group" "simple_webserver_lb_security_group" {
   ingress {
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -158,7 +165,9 @@ resource "aws_lb_listener_rule" "simple-webserver-auth" {
       session_cookie_name   = "AWSELBAuthSessionCookie"
       session_timeout       = 3600
       on_unauthenticated_request = "authenticate"
-      
+      authentication_request_extra_params = {
+        display = "page"
+      }
     }
     
     order = 1
@@ -229,11 +238,11 @@ resource "aws_lb_listener_rule" "simple-webserver-backup" {
     owner = "torsten"
   }
 }
-resource "aws_security_group_rule" "lb_https_ingress" {
-  security_group_id = aws_security_group.simple_webserver_lb_security_group.id
-  type              = "ingress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-}
+# resource "aws_security_group_rule" "lb_https_ingress" {
+#   security_group_id = aws_security_group.simple_webserver_lb_security_group.id
+#   type              = "ingress"
+#   from_port         = 443
+#   to_port           = 443
+#   protocol          = "tcp"
+#   cidr_blocks       = ["0.0.0.0/0"]
+# }
